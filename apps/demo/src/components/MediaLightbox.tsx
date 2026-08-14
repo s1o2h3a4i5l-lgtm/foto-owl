@@ -65,7 +65,32 @@ export function MediaLightbox({
     isOpen,
     onClose,
     onDownload: (item) => {
-      emitDownload({ mediaType: item.type, id: Number(item.id), url: item.src });
+      const downloadUrl = (item.type === 'video' && item.videoSrc) ? item.videoSrc : item.src;
+      emitDownload({ mediaType: item.type, id: Number(item.id), url: downloadUrl });
+
+      // Trigger actual browser download
+      fetch(downloadUrl)
+        .then((response) => response.blob())
+        .then((blob) => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          const extension = item.type === 'video' ? 'mp4' : 'jpg';
+          a.download = `${item.type}-${item.id}.${extension}`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        })
+        .catch(() => {
+          // Fallback to opening in a new tab if CORS blocks fetch
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.click();
+        });
     },
   });
 
