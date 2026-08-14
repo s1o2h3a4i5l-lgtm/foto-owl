@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "vite",
     "prebuild": "pnpm --filter @foto-owl/media-core build && pnpm --filter @foto-owl/media-react build && pnpm --filter @foto-owl/media-ui-react build",
-    "build": "tsc --noEmit && vite build",
-    "postbuild": "typedoc --options ../../typedoc-sdk.json && typedoc --options ../../typedoc-ui.json",
+    "build": "tsc --noEmit && vite build && typedoc --options ../../typedoc-sdk.json && typedoc --options ../../typedoc-ui.json",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
