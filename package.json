@@ -1,0 +1,26 @@
+{
+  "name": "foto-owl-media-sdk",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Headless Media SDK monorepo — Foto Owl take-home assignment",
+  "scripts": {
+    "build": "turbo run build && pnpm run build:docs",
+    "build:docs": "typedoc --options typedoc-sdk.json && typedoc --options typedoc-ui.json",
+    "dev": "turbo run dev --parallel",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean && rimraf node_modules"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1",
+    "turbo": "^2.3.3",
+    "typedoc": "^0.28.20",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

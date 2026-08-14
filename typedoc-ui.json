@@ -1,0 +1,15 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "packages/media-ui-react/src/index.ts"
+  ],
+  "out": "apps/demo/dist/docs/components",
+  "tsconfig": "packages/media-ui-react/tsconfig.json",
+  "exclude": ["**/__tests__/**/*", "**/*.test.ts", "**/*.test.tsx"],
+  "name": "Foto Owl Media SDK - Headless UI Components Documentation",
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "cleanOutputDir": true,
+  "readme": "none"
+}

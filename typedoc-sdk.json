@@ -1,0 +1,16 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "packages/media-core/src/index.ts",
+    "packages/media-react/src/index.ts"
+  ],
+  "out": "apps/demo/dist/docs/sdk",
+  "tsconfig": "packages/media-react/tsconfig.json",
+  "exclude": ["**/__tests__/**/*", "**/*.test.ts", "**/*.test.tsx"],
+  "name": "Foto Owl Media SDK - Core & React Hooks Documentation",
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "cleanOutputDir": true,
+  "readme": "none"
+}
