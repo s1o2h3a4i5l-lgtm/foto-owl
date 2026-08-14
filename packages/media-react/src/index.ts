@@ -9,6 +9,9 @@ export type { UseSearchResult, UseSearchOptions } from './hooks/useSearch.js';
 export { useCurated } from './hooks/useCurated.js';
 export type { UseCuratedResult, UseCuratedOptions } from './hooks/useCurated.js';
 
+export { useTrendingVideos } from './hooks/useTrendingVideos.js';
+export type { UseTrendingVideosResult, UseTrendingVideosOptions } from './hooks/useTrendingVideos.js';
+
 export { usePhoto } from './hooks/usePhoto.js';
 export type { UsePhotoResult } from './hooks/usePhoto.js';
 
