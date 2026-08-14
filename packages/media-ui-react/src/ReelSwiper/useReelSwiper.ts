@@ -112,7 +112,7 @@ export function useReelSwiper<T extends ReelItem>({
 
     const { scrollTop, clientHeight } = container;
     // Which slide is closest to center
-    const newIndex = Math.round(scrollTop / clientHeight);
+    const newIndex = clientHeight > 0 ? Math.round(scrollTop / clientHeight) : 0;
     const clamped = Math.max(0, Math.min(newIndex, items.length - 1));
 
     if (clamped !== activeIndex) {

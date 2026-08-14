@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useMediaEvents } from '@foto-owl/media-react';
 import type { Video } from '@foto-owl/media-react';
 import { useReelSwiper, type ReelItem } from '@foto-owl/media-ui-react';
@@ -23,6 +23,10 @@ export function ReelView({
   const { emitView, emitDownload } = useMediaEvents();
   const [isMuted, setIsMuted] = useState(true);
   const [feedback, setFeedback] = useState<{ type: 'play' | 'pause'; id: number } | null>(null);
+
+  // Gesture classification state
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const isSwipingRef = useRef<boolean>(false);
 
   const { getContainerProps, getSlideProps, activeIndex, scrollTo } = useReelSwiper<VideoWithReel>({
     items: videos as VideoWithReel[],
@@ -98,10 +102,49 @@ export function ReelView({
       });
   }, [emitDownload]);
 
-  // Video click handler for play/pause toggling
+  // Touch gesture classification handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    if (touch) {
+      touchStartRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        time: Date.now(),
+      };
+      isSwipingRef.current = false;
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    const start = touchStartRef.current;
+    if (!start) return;
+
+    const touch = e.changedTouches[0];
+    if (touch) {
+      const deltaX = Math.abs(touch.clientX - start.x);
+      const deltaY = Math.abs(touch.clientY - start.y);
+
+      // If vertical or horizontal movement is greater than 10px, classify as swipe
+      if (deltaX > 10 || deltaY > 10) {
+        isSwipingRef.current = true;
+        // Keep swiping state active briefly to prevent click handler from firing
+        setTimeout(() => {
+          isSwipingRef.current = false;
+        }, 150);
+      }
+    }
+    touchStartRef.current = null;
+  }, []);
+
+  // Video click/tap handler for play/pause toggling
   const handleVideoClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     if (target.closest('.reel-action-btn') || target.closest('button')) {
+      return;
+    }
+
+    // Ignore taps that are actually part of a swipe/drag gesture
+    if (isSwipingRef.current) {
       return;
     }
 
@@ -125,13 +168,13 @@ export function ReelView({
     return <div className="status-empty"><p>No videos found.</p></div>;
   }
 
-  // Calculate active dot index (exactly 3 dots representation)
+  // Calculate active dot index (exactly 3 dots proportional mapping)
   let activeDot = 0;
   if (videos.length > 0) {
-    const segment = videos.length / 3;
-    if (activeIndex < segment) {
+    const ratio = activeIndex / Math.max(1, videos.length - 1);
+    if (ratio < 0.33) {
       activeDot = 0;
-    } else if (activeIndex < segment * 2) {
+    } else if (ratio < 0.66) {
       activeDot = 1;
     } else {
       activeDot = 2;
@@ -156,6 +199,8 @@ export function ReelView({
               className={`reel-slide${isActive ? ' active-slide' : ''}`}
               id={`reel-slide-${video.id}`}
               onClick={handleVideoClick}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
             >
               {/* Ambient blurred backdrop */}
               <div
@@ -200,14 +245,29 @@ export function ReelView({
                   }}
                   aria-label={isMuted ? 'Unmute video' : 'Mute video'}
                 >
-                  {isMuted ? '🔇' : '🔊'}
+                  {isMuted ? (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                      <line x1="23" y1="9" x2="17" y2="15" />
+                      <line x1="17" y1="9" x2="23" y2="15" />
+                    </svg>
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                    </svg>
+                  )}
                 </button>
                 <button
                   className="reel-action-btn download-btn"
                   onClick={(e) => handleDownload(video, e)}
                   aria-label="Download video"
                 >
-                  ↓
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
                 </button>
               </div>
 
