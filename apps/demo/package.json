@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "pnpm --filter @foto-owl/media-core build && pnpm --filter @foto-owl/media-react build && pnpm --filter @foto-owl/media-ui-react build",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
