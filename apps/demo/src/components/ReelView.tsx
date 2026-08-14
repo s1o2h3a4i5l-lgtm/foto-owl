@@ -24,6 +24,9 @@ export function ReelView({
   const [isMuted, setIsMuted] = useState(true);
   const [feedback, setFeedback] = useState<{ type: 'play' | 'pause'; id: number } | null>(null);
 
+  // Persistent refs to every <video> element — keyed by video.id
+  const videoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
+
   // Gesture classification state
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const isSwipingRef = useRef<boolean>(false);
@@ -31,20 +34,51 @@ export function ReelView({
   const { getContainerProps, getSlideProps, activeIndex, scrollTo } = useReelSwiper<VideoWithReel>({
     items: videos as VideoWithReel[],
     onActiveChange: (video, index) => {
-      // Emit view event whenever a new reel becomes active
       emitView({ mediaType: 'video', id: video.id });
-      // Infinite scroll: fetch next page when user is near the end
       if (index >= videos.length - 2 && hasMore && !loading) {
         onLoadMore?.();
       }
     },
   });
 
-  // Emit for the initially visible slide
+  // Emit view for the initial slide on mount
   useEffect(() => {
     const first = videos[0];
     if (first) emitView({ mediaType: 'video', id: first.id });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Core lifecycle: play active, pause all others ───────────────────────────
+  // This effect runs whenever activeIndex changes. It explicitly calls
+  // play() on the newly active video and pause() on all others.
+  useEffect(() => {
+    videos.forEach((video, index) => {
+      const el = videoRefs.current.get(video.id);
+      if (!el) return;
+
+      if (index === activeIndex) {
+        // Sync muted state so mobile autoplay is permitted
+        el.muted = isMuted;
+        const playPromise = el.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(() => {
+            // Autoplay blocked — this is fine, the user can tap to play
+          });
+        }
+      } else {
+        el.pause();
+        // Rewind the previous video so it starts from the beginning next time
+        el.currentTime = 0;
+      }
+    });
+  }, [activeIndex, videos]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync muted state change to the currently active video element immediately
+  useEffect(() => {
+    const activeVideo = videos[activeIndex];
+    if (!activeVideo) return;
+    const el = videoRefs.current.get(activeVideo.id);
+    if (el) el.muted = isMuted;
+  }, [isMuted, activeIndex, videos]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -102,7 +136,7 @@ export function ReelView({
       });
   }, [emitDownload]);
 
-  // Touch gesture classification handlers
+  // Touch gesture classification
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
     if (touch) {
@@ -124,37 +158,36 @@ export function ReelView({
       const deltaX = Math.abs(touch.clientX - start.x);
       const deltaY = Math.abs(touch.clientY - start.y);
 
-      // If vertical or horizontal movement is greater than 10px, classify as swipe
+      // If movement > 10px in any direction, classify as a swipe
       if (deltaX > 10 || deltaY > 10) {
         isSwipingRef.current = true;
-        // Keep swiping state active briefly to prevent click handler from firing
+        // Hold the swiping flag briefly to block the synthetic click event
         setTimeout(() => {
           isSwipingRef.current = false;
-        }, 150);
+        }, 200);
       }
     }
     touchStartRef.current = null;
   }, []);
 
-  // Video click/tap handler for play/pause toggling
-  const handleVideoClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  // Tap/click to toggle play/pause (only fires when NOT a swipe)
+  const handleVideoClick = useCallback((e: React.MouseEvent<HTMLDivElement>, videoId: number) => {
     const target = e.target as HTMLElement;
     if (target.closest('.reel-action-btn') || target.closest('button')) {
       return;
     }
 
-    // Ignore taps that are actually part of a swipe/drag gesture
     if (isSwipingRef.current) {
       return;
     }
 
-    const videoEl = e.currentTarget.querySelector('video');
-    if (videoEl) {
-      if (videoEl.paused) {
-        videoEl.play().catch(() => {});
+    const el = videoRefs.current.get(videoId);
+    if (el) {
+      if (el.paused) {
+        el.play().catch(() => {});
         setFeedback({ type: 'play', id: Date.now() });
       } else {
-        videoEl.pause();
+        el.pause();
         setFeedback({ type: 'pause', id: Date.now() });
       }
     }
@@ -168,17 +201,13 @@ export function ReelView({
     return <div className="status-empty"><p>No videos found.</p></div>;
   }
 
-  // Calculate active dot index (exactly 3 dots proportional mapping)
+  // Calculate active dot (3-dot proportional mapping)
   let activeDot = 0;
   if (videos.length > 0) {
     const ratio = activeIndex / Math.max(1, videos.length - 1);
-    if (ratio < 0.33) {
-      activeDot = 0;
-    } else if (ratio < 0.66) {
-      activeDot = 1;
-    } else {
-      activeDot = 2;
-    }
+    if (ratio < 0.33) activeDot = 0;
+    else if (ratio < 0.66) activeDot = 1;
+    else activeDot = 2;
   }
 
   return (
@@ -189,7 +218,6 @@ export function ReelView({
           const isActive = index === activeIndex;
           const shouldPreload = index === activeIndex + 1 || index === activeIndex - 1;
 
-          // Pick the best video file for playback
           const hdFile = video.videoFiles.find((f) => f.quality === 'hd') ?? video.videoFiles[0];
 
           return (
@@ -198,7 +226,7 @@ export function ReelView({
               {...slideProps}
               className={`reel-slide${isActive ? ' active-slide' : ''}`}
               id={`reel-slide-${video.id}`}
-              onClick={handleVideoClick}
+              onClick={(e) => handleVideoClick(e, video.id)}
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
             >
@@ -209,23 +237,31 @@ export function ReelView({
               />
 
               <div className="reel-video-wrapper">
-                {isActive && hdFile ? (
+                {hdFile ? (
+                  /*
+                   * The <video> element stays mounted for all slides, not just the active one.
+                   * We control playback imperatively via videoRefs so that mobile browsers
+                   * honor the play() call triggered from the scroll settle event rather than
+                   * trying to autoplay a newly mounted element.
+                   */
                   <video
+                    ref={(el) => {
+                      if (el) {
+                        videoRefs.current.set(video.id, el);
+                      } else {
+                        videoRefs.current.delete(video.id);
+                      }
+                    }}
                     src={hdFile.link}
-                    autoPlay
                     loop
                     muted={isMuted}
                     playsInline
+                    preload={isActive || shouldPreload ? 'auto' : 'none'}
                     poster={video.image}
                     aria-label={`Video by ${video.user.name}`}
-                  />
-                ) : shouldPreload && hdFile ? (
-                  <video
-                    src={hdFile.link}
-                    preload="auto"
-                    muted
-                    playsInline
-                    style={{ display: 'none' }}
+                    // visibility:hidden keeps the element mounted (required for imperative
+                    // play/pause) while non-active slides don't draw on screen
+                    style={isActive ? undefined : { visibility: 'hidden', pointerEvents: 'none' }}
                   />
                 ) : (
                   <img
@@ -235,13 +271,13 @@ export function ReelView({
                 )}
               </div>
 
-              {/* Action buttons inside the slide */}
+              {/* Action buttons */}
               <div className="reel-action-buttons">
                 <button
                   className="reel-action-btn mute-btn"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsMuted(!isMuted);
+                    setIsMuted((m) => !m);
                   }}
                   aria-label={isMuted ? 'Unmute video' : 'Mute video'}
                 >
@@ -271,7 +307,7 @@ export function ReelView({
                 </button>
               </div>
 
-              {/* Feedback Overlay */}
+              {/* Play/Pause Feedback Overlay */}
               {isActive && feedback && (
                 <div key={feedback.id} className="video-feedback-overlay">
                   <span className="feedback-icon">{feedback.type === 'play' ? '▶' : '❚❚'}</span>
@@ -287,7 +323,7 @@ export function ReelView({
         })}
       </div>
 
-      {/* Progress dots indicator */}
+      {/* 3-Dot position indicator */}
       {videos.length > 0 && (
         <div className="reel-dots-indicator" aria-label="Reel position indicator">
           <span className={`reel-dot ${activeDot === 0 ? 'active' : ''}`} />
