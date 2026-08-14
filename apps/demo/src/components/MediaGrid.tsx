@@ -59,6 +59,7 @@ export function MediaGrid({
             key={photo.id}
             {...getItemProps(photo as PhotoWithGrid, index)}
             className="media-grid-item"
+            style={{ aspectRatio: `${photo.width} / ${photo.height}` }}
           >
             <img
               src={photo.src.medium}
@@ -66,6 +67,7 @@ export function MediaGrid({
               loading="lazy"
               width={photo.width}
               height={photo.height}
+              style={{ aspectRatio: `${photo.width} / ${photo.height}`, width: '100%', height: 'auto' }}
             />
             <div className="item-overlay" aria-hidden="true">
               <span className="item-photographer">{photo.photographer}</span>

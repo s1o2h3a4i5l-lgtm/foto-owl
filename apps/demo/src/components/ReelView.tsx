@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useMediaEvents } from '@foto-owl/media-react';
 import type { Video } from '@foto-owl/media-react';
 import { useReelSwiper, type ReelItem } from '@foto-owl/media-ui-react';
@@ -13,17 +13,6 @@ interface ReelViewProps {
   hasMore?: boolean;
 }
 
-/**
- * ReelView — wires useSearch (video results) + useReelSwiper (headless behavior).
- *
- * Demonstrates the consumer providing:
- * - The scroll-snap CSS (not from useReelSwiper — it only provides onScroll + ref)
- * - The slide layout and video element
- * - Event emission for 'view' when a new slide becomes active
- *
- * The CSS for .reel-container and .reel-slide (scroll-snap-type, height etc.)
- * is in app.css, not in the hook.
- */
 export function ReelView({
   videos,
   loading,
@@ -31,7 +20,9 @@ export function ReelView({
   onLoadMore,
   hasMore = false,
 }: ReelViewProps): React.JSX.Element {
-  const { emitView } = useMediaEvents();
+  const { emitView, emitDownload } = useMediaEvents();
+  const [isMuted, setIsMuted] = useState(true);
+  const [feedback, setFeedback] = useState<{ type: 'play' | 'pause'; id: number } | null>(null);
 
   const { getContainerProps, getSlideProps, activeIndex, scrollTo } = useReelSwiper<VideoWithReel>({
     items: videos as VideoWithReel[],
@@ -51,6 +42,81 @@ export function ReelView({
     if (first) emitView({ mediaType: 'video', id: first.id });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.getAttribute('contenteditable') === 'true')
+      ) {
+        return;
+      }
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        scrollTo(activeIndex + 1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        scrollTo(activeIndex - 1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeIndex, scrollTo]);
+
+  // Video download
+  const handleDownload = useCallback((video: Video, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const hdFile = video.videoFiles.find((f) => f.quality === 'hd') ?? video.videoFiles[0];
+    if (!hdFile) return;
+
+    emitDownload({ mediaType: 'video', id: video.id, url: hdFile.link });
+
+    fetch(hdFile.link)
+      .then((response) => response.blob())
+      .then((blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `video-${video.id}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      })
+      .catch(() => {
+        const a = document.createElement('a');
+        a.href = hdFile.link;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.click();
+      });
+  }, [emitDownload]);
+
+  // Video click handler for play/pause toggling
+  const handleVideoClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('.reel-action-btn') || target.closest('button')) {
+      return;
+    }
+
+    const videoEl = e.currentTarget.querySelector('video');
+    if (videoEl) {
+      if (videoEl.paused) {
+        videoEl.play().catch(() => {});
+        setFeedback({ type: 'play', id: Date.now() });
+      } else {
+        videoEl.pause();
+        setFeedback({ type: 'pause', id: Date.now() });
+      }
+    }
+  }, []);
+
   if (error) {
     return <div className="status-error" role="alert">Error: {error.message}</div>;
   }
@@ -59,13 +125,26 @@ export function ReelView({
     return <div className="status-empty"><p>No videos found.</p></div>;
   }
 
+  // Calculate active dot index (exactly 3 dots representation)
+  let activeDot = 0;
+  if (videos.length > 0) {
+    const segment = videos.length / 3;
+    if (activeIndex < segment) {
+      activeDot = 0;
+    } else if (activeIndex < segment * 2) {
+      activeDot = 1;
+    } else {
+      activeDot = 2;
+    }
+  }
+
   return (
     <>
-      {/* The reel container — consumer provides CSS (scroll-snap-type: y mandatory) */}
       <div {...getContainerProps()} className="reel-container" id="reel-container">
         {videos.map((video, index) => {
           const slideProps = getSlideProps(video as VideoWithReel, index);
           const isActive = index === activeIndex;
+          const shouldPreload = index === activeIndex + 1 || index === activeIndex - 1;
 
           // Pick the best video file for playback
           const hdFile = video.videoFiles.find((f) => f.quality === 'hd') ?? video.videoFiles[0];
@@ -76,6 +155,7 @@ export function ReelView({
               {...slideProps}
               className={`reel-slide${isActive ? ' active-slide' : ''}`}
               id={`reel-slide-${video.id}`}
+              onClick={handleVideoClick}
             >
               {/* Ambient blurred backdrop */}
               <div
@@ -89,19 +169,54 @@ export function ReelView({
                     src={hdFile.link}
                     autoPlay
                     loop
-                    muted
+                    muted={isMuted}
                     playsInline
                     poster={video.image}
                     aria-label={`Video by ${video.user.name}`}
                   />
+                ) : shouldPreload && hdFile ? (
+                  <video
+                    src={hdFile.link}
+                    preload="auto"
+                    muted
+                    playsInline
+                    style={{ display: 'none' }}
+                  />
                 ) : (
-                  // Lazy: show poster while not active
                   <img
                     src={video.image}
                     alt={`Video by ${video.user.name}`}
                   />
                 )}
               </div>
+
+              {/* Action buttons inside the slide */}
+              <div className="reel-action-buttons">
+                <button
+                  className="reel-action-btn mute-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsMuted(!isMuted);
+                  }}
+                  aria-label={isMuted ? 'Unmute video' : 'Mute video'}
+                >
+                  {isMuted ? '🔇' : '🔊'}
+                </button>
+                <button
+                  className="reel-action-btn download-btn"
+                  onClick={(e) => handleDownload(video, e)}
+                  aria-label="Download video"
+                >
+                  ↓
+                </button>
+              </div>
+
+              {/* Feedback Overlay */}
+              {isActive && feedback && (
+                <div key={feedback.id} className="video-feedback-overlay">
+                  <span className="feedback-icon">{feedback.type === 'play' ? '▶' : '❚❚'}</span>
+                </div>
+              )}
 
               <div className="reel-meta">
                 <h3>{video.user.name}</h3>
@@ -112,18 +227,12 @@ export function ReelView({
         })}
       </div>
 
-      {/* Progress indicator — custom-built, shows a subtle vertical progress rail */}
+      {/* Progress dots indicator */}
       {videos.length > 0 && (
-        <div className="reel-progress-wrapper" aria-label="Reel progress">
-          <div className="reel-progress-rail">
-            <div
-              className="reel-progress-bar"
-              style={{
-                height: `${Math.max(10, (1 / videos.length) * 100)}%`,
-                top: `${(activeIndex / Math.max(1, videos.length - 1)) * (100 - Math.max(10, (1 / videos.length) * 100))}%`,
-              }}
-            />
-          </div>
+        <div className="reel-dots-indicator" aria-label="Reel position indicator">
+          <span className={`reel-dot ${activeDot === 0 ? 'active' : ''}`} />
+          <span className={`reel-dot ${activeDot === 1 ? 'active' : ''}`} />
+          <span className={`reel-dot ${activeDot === 2 ? 'active' : ''}`} />
         </div>
       )}
 

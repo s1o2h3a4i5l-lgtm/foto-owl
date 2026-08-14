@@ -694,65 +694,113 @@ body {
   font-family: var(--font);
 }
 
-.reel-progress-wrapper {
+/* ── Actions buttons inside each reel slide ── */
+.reel-action-buttons {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  z-index: 10;
+}
+
+.reel-action-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(10, 10, 12, 0.65);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.reel-action-btn:hover,
+.reel-action-btn:focus-visible {
+  transform: scale(1.1);
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+  outline: none;
+}
+
+.reel-action-btn:active {
+  transform: scale(0.95);
+}
+
+/* ── 3-Dot vertical position indicator ── */
+.reel-dots-indicator {
   position: absolute;
   right: 24px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 16px;
+  gap: 10px;
   z-index: 10;
-  background: rgba(10, 10, 12, 0.6);
+  background: rgba(10, 10, 12, 0.5);
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 12px 8px;
-  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 10px 8px;
+  border-radius: 16px;
 }
 
-.reel-progress-text {
-  font-family: var(--font);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-text);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  line-height: 1;
+.reel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transition: background var(--transition-fast), transform var(--transition-fast);
 }
 
-.reel-progress-text .current {
-  color: #fff;
-}
-
-.reel-progress-text .divider {
-  color: var(--color-text-muted);
-  opacity: 0.5;
-  font-size: 9px;
-}
-
-.reel-progress-text .total {
-  color: var(--color-text-muted);
-}
-
-.reel-progress-rail {
-  position: relative;
-  height: 120px;
-  width: 2px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 1px;
-}
-
-.reel-progress-bar {
-  position: absolute;
-  left: 0;
-  width: 2px;
+.reel-dot.active {
   background: var(--color-accent);
+  transform: scale(1.2);
   box-shadow: 0 0 8px var(--color-accent);
-  border-radius: 1px;
-  transition: top var(--transition-fast) ease-out, height var(--transition-fast);
+}
+
+/* ── Video Play/Pause Feedback Overlay ── */
+.video-feedback-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.feedback-icon {
+  font-size: 2.5rem;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: feedback-fade 0.5s ease-out forwards;
+}
+
+@keyframes feedback-fade {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
 }
 
 /* ── States (Polished & elegant) ── */
@@ -792,7 +840,7 @@ body {
   height: 80px;
 }
 
-/* ── Responsive adjustments ── */
+/* ── Mobile Viewport Full-Screen Reels Mode ── */
 @media (max-width: 768px) {
   .app-header {
     padding: 12px 16px;
@@ -816,17 +864,100 @@ body {
   }
   .lightbox-nav-prev { left: 8px; }
   .lightbox-nav-next { right: 8px; }
-  .reel-meta {
-    left: 16px;
-    right: 16px;
-    bottom: 16px;
+
+  /* Hide standard header on mobile when reels are active */
+  .app:has(.page-videos-active) .app-header {
+    display: none !important;
   }
-  .reel-progress-wrapper {
-    right: 12px;
-    padding: 8px 4px;
-    gap: 8px;
+
+  /* Force full viewport height with stable container */
+  .app:has(.page-videos-active) {
+    height: 100dvh !important;
+    height: 100svh !important;
+    overflow: hidden !important;
   }
-  .reel-progress-rail {
-    height: 80px;
+
+  .app:has(.page-videos-active) .app-main {
+    height: 100dvh !important;
+    height: 100svh !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .app:has(.page-videos-active) .page-curated,
+  .app:has(.page-videos-active) section {
+    height: 100dvh !important;
+    height: 100svh !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .app:has(.page-videos-active) .search-reels-wrapper {
+    height: 100% !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* Translucent floating tab switcher on mobile full-screen */
+  .app:has(.page-videos-active) .tab-bar-container {
+    position: absolute !important;
+    top: env(safe-area-inset-top, 16px) !important;
+    left: 16px !important;
+    right: 16px !important;
+    z-index: 110 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+
+  .app:has(.page-videos-active) .tab-bar {
+    background: rgba(10, 10, 12, 0.45) !important;
+    backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    padding: 4px !important;
+    border-radius: 24px !important;
+    margin: 0 auto !important;
+    max-width: 240px !important;
+  }
+
+  .app:has(.page-videos-active) .tab-btn {
+    color: rgba(255, 255, 255, 0.6) !important;
+    font-size: 13px !important;
+    padding: 6px 16px !important;
+    border-radius: 20px !important;
+  }
+
+  .app:has(.page-videos-active) .tab-btn.active {
+    color: #fff !important;
+    background: rgba(255, 255, 255, 0.16) !important;
+  }
+
+  /* Adjust position of mobile reels elements */
+  .app:has(.page-videos-active) .reel-meta {
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+    left: 16px !important;
+    right: 76px !important;
+  }
+
+  .app:has(.page-videos-active) .reel-action-buttons {
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+    right: 16px !important;
+  }
+
+  .app:has(.page-videos-active) .reel-dots-indicator {
+    right: 16px !important;
+  }
+
+  .app:has(.page-videos-active) .reel-video-wrapper {
+    padding: 0 !important;
+  }
+
+  .app:has(.page-videos-active) .reel-video-wrapper video,
+  .app:has(.page-videos-active) .reel-video-wrapper img {
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
   }
 }
